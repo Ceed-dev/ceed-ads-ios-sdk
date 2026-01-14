@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - 1) ResolvedAd (Returned from /api/requests)
 
-public struct ResolvedAd: Codable, Equatable {
+public struct ResolvedAd: Codable, Equatable, Sendable {
     public let id: String
     public let advertiserId: String
     public let advertiserName: String
@@ -13,13 +13,13 @@ public struct ResolvedAd: Codable, Equatable {
     public let ctaUrl: String
 }
 
-public enum AdFormat: String, Codable, Equatable {
+public enum AdFormat: String, Codable, Equatable, Sendable {
     case actionCard = "action_card"
 }
 
 // MARK: - 2) Request Payload (SDK -> /api/requests)
 
-public struct RequestPayload: Codable, Equatable {
+public struct RequestPayload: Codable, Equatable, Sendable {
     public let appId: String
     public let conversationId: String
     public let messageId: String
@@ -31,7 +31,7 @@ public struct RequestPayload: Codable, Equatable {
 
 // MARK: - 3) Event Payload (SDK -> /api/events)
 
-public struct EventPayload: Codable, Equatable {
+public struct EventPayload: Codable, Equatable, Sendable {
     public let type: EventType
     public let adId: String
     public let advertiserId: String
@@ -41,14 +41,14 @@ public struct EventPayload: Codable, Equatable {
     public let userId: String?
 }
 
-public enum EventType: String, Codable, Equatable {
+public enum EventType: String, Codable, Equatable, Sendable {
     case impression
     case click
 }
 
 // MARK: - 4) Internal SDK Config (NOT public)
 
-struct SDKConfig {
+struct SDKConfig: Sendable {
     var appId: String?          // TS: string | null
     var apiBaseUrl: String      // TS: string (e.g., "/api")
     var sdkVersion: String
@@ -61,31 +61,31 @@ struct SDKConfig {
 
 // MARK: - 6) Chat Message Types (Used in SDK Test Scenarios)
 
-public struct ChatMessageUserAi: Codable, Equatable {
+public struct ChatMessageUserAi: Codable, Equatable, Sendable {
     public let id: String
     public let role: ChatUserAiRole
     public let text: String
 }
 
-public enum ChatUserAiRole: String, Codable, Equatable {
+public enum ChatUserAiRole: String, Codable, Equatable, Sendable {
     case user
     case ai
 }
 
-public struct ChatMessageAd: Codable, Equatable {
+public struct ChatMessageAd: Codable, Equatable, Sendable {
     public let id: String
     public let role: ChatAdRole
     public let ad: ResolvedAd
     public let requestId: String?    // TS: string | null
 }
 
-public enum ChatAdRole: String, Codable, Equatable {
+public enum ChatAdRole: String, Codable, Equatable, Sendable {
     case ad
 }
 
 /// TS: `ChatMessage = ChatMessageUserAi | ChatMessageAd`
 /// Swift representation that encodes/decodes based on the `"role"` field.
-public enum ChatMessage: Codable, Equatable {
+public enum ChatMessage: Codable, Equatable, Sendable {
     case userAi(ChatMessageUserAi)
     case ad(ChatMessageAd)
 

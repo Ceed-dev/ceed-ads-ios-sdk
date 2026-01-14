@@ -39,7 +39,12 @@ private struct RequestAdResponse: Codable {
 }
 
 // MARK: - APIClient
-public final class APIClient {
+public final class APIClient: @unchecked Sendable {
+
+    // MARK: - Thread Safety
+    // Protects mutable SDK state (config).
+    private let queue = DispatchQueue(label: "com.ceedads.sdk.apiclient")
+
     // Internal SDK State (Populated by initialize())
     private var config = SDKConfig(
         appId: nil,
@@ -61,20 +66,18 @@ public final class APIClient {
     // MARK: - Public: initialize client config
     // Matches TS: initClient(appId, apiBaseUrl?)
     public func initClient(appId: String, apiBaseUrl: String? = nil) {
-        config.appId = appId
-        config.initialized = true
+        queue.sync {
+            self.config.appId = appId
+            self.config.initialized = true
 
-        // Allow override only when explicitly provided
-        if let apiBaseUrl, !apiBaseUrl.isEmpty {
-            config.apiBaseUrl = apiBaseUrl
+            // Allow override only when explicitly provided
+            if let apiBaseUrl, !apiBaseUrl.isEmpty {
+                self.config.apiBaseUrl = apiBaseUrl
+            }
         }
     }
 
     // MARK: - Public: Request an Ad (POST /api/requests)
-    //
-    // TS takes: Omit<RequestPayload, "sdkVersion" | "appId">
-    // Swift equivalent: pass the fields excluding appId/sdkVersion,
-    // then we merge with config (same behavior as TS).
     public func requestAd(
         conversationId: String,
         messageId: String,
@@ -82,40 +85,54 @@ public final class APIClient {
         language: String? = nil,
         userId: String? = nil
     ) async throws -> (ad: ResolvedAd?, requestId: String?) {
-        guard config.initialized, let appId = config.appId else {
+
+        // Snapshot config (no await while locked)
+        let snapshot: (appId: String, apiBaseUrl: String, sdkVersion: String, initialized: Bool) = queue.sync {
+            (
+                self.config.appId ?? "",
+                self.config.apiBaseUrl,
+                self.config.sdkVersion,
+                self.config.initialized
+            )
+        }
+
+        guard snapshot.initialized, !snapshot.appId.isEmpty else {
             throw CeedAdsError.notInitialized
         }
 
         let mergedPayload = RequestPayload(
-            appId: appId,
+            appId: snapshot.appId,
             conversationId: conversationId,
             messageId: messageId,
             contextText: contextText,
             language: language,
             userId: userId,
-            sdkVersion: config.sdkVersion
+            sdkVersion: snapshot.sdkVersion
         )
 
-        let urlString = "\(config.apiBaseUrl)/requests"
+        let urlString = "\(snapshot.apiBaseUrl)/requests"
         let response: RequestAdResponse = try await postJSON(urlString: urlString, body: mergedPayload)
 
-        // requestId is returned by the backend and used for event tracking.
         return (ad: response.ad, requestId: response.requestId)
     }
 
     // MARK: - Public: Send impression/click events (POST /api/events)
     public func sendEvent(_ event: EventPayload) async throws {
-        guard config.initialized, config.appId != nil else {
+
+        // Snapshot config
+        let snapshot: (apiBaseUrl: String, initialized: Bool, hasAppId: Bool) = queue.sync {
+            (self.config.apiBaseUrl, self.config.initialized, self.config.appId != nil)
+        }
+
+        guard snapshot.initialized, snapshot.hasAppId else {
             throw CeedAdsError.notInitialized
         }
 
-        let urlString = "\(config.apiBaseUrl)/events"
+        let urlString = "\(snapshot.apiBaseUrl)/events"
         _ = try await postJSON(urlString: urlString, body: event) as EmptyResponse
-        // No return value needed (matches TS)
     }
 
     // MARK: - Internal Helper — POST Wrapper
-    // Executes a POST request with JSON payload.
     private func postJSON<T: Decodable, Body: Encodable>(urlString: String, body: Body) async throws -> T {
         guard let url = URL(string: urlString) else {
             throw CeedAdsError.invalidURL(urlString)
