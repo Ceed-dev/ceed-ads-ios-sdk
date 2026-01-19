@@ -121,6 +121,12 @@ A SwiftUI view that renders an action card ad.
 CeedAdsActionCardView(ad: ResolvedAd, requestId: String?)
 ```
 
+## Sample App
+
+See a complete working example in the sample app repository:
+
+[CeedAdsIOSSample](https://github.com/Ceed-dev/CeedAdsIOSSample)
+
 ## License
 
 MIT License - see [LICENSE](LICENSE) for details.
