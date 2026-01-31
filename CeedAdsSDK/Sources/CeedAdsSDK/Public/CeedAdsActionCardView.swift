@@ -1,132 +1,167 @@
 import SwiftUI
 
-/// SwiftUI equivalent of Web SDK `renderActionCard(...)`.
-/// - No API calls here (ad is already resolved).
-/// - Triggers impression immediately after render (onAppear).
-/// - On CTA tap: await trackClick first, then open URL.
-/// - requestId nil => "unknown" (same as Web SDK).
+// MARK: - Action Card Ad View
+
+/// A SwiftUI view that displays an action card advertisement.
+///
+/// Action cards are the standard ad format, displaying:
+/// - Advertiser name with indicator
+/// - Title and description
+/// - Call-to-action button
+///
+/// ## Automatic Tracking
+/// - **Impression**: Tracked automatically when the view appears
+/// - **Click**: Tracked when the CTA button is tapped
+///
+/// ## Example
+/// ```swift
+/// if let ad = ad {
+///     CeedAdsActionCardView(ad: ad, requestId: requestId)
+/// }
+/// ```
+///
+/// ## Web SDK Equivalent
+/// This is the iOS equivalent of the Web SDK's `renderActionCard(...)` function.
 public struct CeedAdsActionCardView: View {
+
+    // MARK: - Properties
+
+    /// The resolved ad to display
     public let ad: ResolvedAd
+
+    /// Request ID for event tracking (nil defaults to "unknown")
     public let requestId: String?
+
+    // MARK: - Environment & State
 
     @Environment(\.openURL) private var openURL
     @State private var didTrackImpression = false
     @State private var isClickInFlight = false
 
+    // MARK: - Initialization
+
+    /// Creates a new action card view.
+    /// - Parameters:
+    ///   - ad: The resolved ad to display
+    ///   - requestId: Request ID for tracking (pass nil if unavailable)
     public init(ad: ResolvedAd, requestId: String?) {
         self.ad = ad
         self.requestId = requestId
     }
 
+    // MARK: - Body
+
     public var body: some View {
         let rid = requestId ?? "unknown"
 
         VStack(alignment: .leading, spacing: 0) {
-            // Header (Advertiser + Dot + "Ad" label)
-            HStack(alignment: .center) {
-                HStack(spacing: 8) {
-                    Circle()
-                        .fill(Color(hex: 0x3A82F7))
-                        .frame(width: 10, height: 10)
+            // Header
+            headerSection
 
-                    Text(ad.advertiserName)
-                        .font(.system(size: 14))
-                        .opacity(0.9)
-                }
+            // Content
+            titleSection
+            descriptionSection
 
-                Spacer()
-
-                Text("Ad")
-                    .font(.system(size: 14))
-                    .opacity(0.55)
-            }
-            .padding(.bottom, 14)
-
-            // Title
-            Text(ad.title)
-                .font(.system(size: 19, weight: .semibold))
-                .lineSpacing(2)
-                .padding(.bottom, 10)
-
-            // Description
-            Text(ad.description)
-                .font(.system(size: 14))
-                .opacity(0.8)
-                .lineSpacing(3)
-                .padding(.bottom, 18)
-
-            // CTA Button
-            Button {
-                guard !isClickInFlight else { return }
-                isClickInFlight = true
-
-                Task {
-                    defer { isClickInFlight = false }
-
-                    // Match Web SDK: await trackClick, then open.
-                    // If tracking fails, do NOT open (same behavior as an unhandled rejection).
-                    do {
-                        try await CeedAdsSDK.trackClick(ad: ad, requestId: rid)
-                    } catch {
-                        return
-                    }
-
-                    guard let url = URL(string: ad.ctaUrl) else { return }
-                    openURL(url)
-                }
-            } label: {
-                Text(ad.ctaText)
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(CeedAdsPrimaryButtonStyle())
-            .padding(.top, 6)
-            .disabled(isClickInFlight)
+            // CTA
+            ctaButton(requestId: rid)
         }
         .padding(20)
         .frame(maxWidth: 460, alignment: .leading)
-        .background(Color(hex: 0x141414))
-        .foregroundColor(Color(hex: 0xE5E5E5))
+        .background(Color.ceedBackground)
+        .foregroundColor(Color.ceedText)
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                .stroke(Color.ceedBorder, lineWidth: 1)
         )
         .cornerRadius(12)
         .shadow(color: Color.black.opacity(0.35), radius: 8, x: 0, y: 2)
         .padding(.vertical, 16)
         .onAppear {
-            // Match Web SDK: trigger immediately after render.
-            guard !didTrackImpression else { return }
-            didTrackImpression = true
-
-            Task {
-                // Web SDK doesn't await; we also don't block UI here.
-                try? await CeedAdsSDK.trackImpression(ad: ad, requestId: rid)
-            }
+            trackImpressionIfNeeded(requestId: rid)
         }
     }
-}
 
-// MARK: - Styles
+    // MARK: - Subviews
 
-private struct CeedAdsPrimaryButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .background(configuration.isPressed ? Color(hex: 0x2F6AD4) : Color(hex: 0x3A82F7))
-            .cornerRadius(8)
+    private var headerSection: some View {
+        HStack(alignment: .center) {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(Color.ceedBlue)
+                    .frame(width: 10, height: 10)
+
+                Text(ad.advertiserName)
+                    .font(.system(size: 14))
+                    .opacity(0.9)
+            }
+
+            Spacer()
+
+            Text("Ad")
+                .font(.system(size: 14))
+                .opacity(0.55)
+        }
+        .padding(.bottom, 14)
     }
-}
 
-// MARK: - Color helper
+    private var titleSection: some View {
+        Text(ad.title)
+            .font(.system(size: 19, weight: .semibold))
+            .lineSpacing(2)
+            .padding(.bottom, 10)
+    }
 
-private extension Color {
-    init(hex: UInt32) {
-        let r = Double((hex >> 16) & 0xFF) / 255.0
-        let g = Double((hex >> 8) & 0xFF) / 255.0
-        let b = Double(hex & 0xFF) / 255.0
-        self.init(red: r, green: g, blue: b)
+    private var descriptionSection: some View {
+        Text(ad.description)
+            .font(.system(size: 14))
+            .opacity(0.8)
+            .lineSpacing(3)
+            .padding(.bottom, 18)
+    }
+
+    private func ctaButton(requestId: String) -> some View {
+        Button {
+            handleCtaTap(requestId: requestId)
+        } label: {
+            Text(ad.ctaText)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(CeedAdsPrimaryButtonStyle())
+        .padding(.top, 6)
+        .disabled(isClickInFlight)
+    }
+
+    // MARK: - Actions
+
+    private func trackImpressionIfNeeded(requestId: String) {
+        guard !didTrackImpression else { return }
+        didTrackImpression = true
+
+        Task {
+            try? await CeedAdsSDK.trackImpression(ad: ad, requestId: requestId)
+        }
+    }
+
+    private func handleCtaTap(requestId: String) {
+        guard !isClickInFlight else { return }
+        isClickInFlight = true
+
+        Task {
+            defer { isClickInFlight = false }
+
+            // Track click before opening URL
+            do {
+                try await CeedAdsSDK.trackClick(ad: ad, requestId: requestId)
+            } catch {
+                return
+            }
+
+            guard let url = URL(string: ad.ctaUrl) else { return }
+            openURL(url)
+        }
     }
 }

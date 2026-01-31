@@ -53,22 +53,33 @@ public enum CeedAdsSDK {
     }
 
     // MARK: - 2) Public: requestAd(options)
+    /// Requests a contextual ad based on conversation context.
+    ///
+    /// - Parameters:
+    ///   - conversationId: Unique identifier for the conversation session
+    ///   - messageId: Unique identifier for the current message
+    ///   - contextText: The conversation text used for contextual matching
+    ///   - userId: Optional user identifier for personalization
+    ///   - formats: Optional array of preferred ad formats (nil requests all formats)
+    /// - Returns: A tuple containing the matched ad (if any) and a request ID for tracking
     public static func requestAd(
         conversationId: String,
         messageId: String,
         contextText: String,
-        userId: String? = nil
+        userId: String? = nil,
+        formats: [AdFormat]? = nil
     ) async throws -> (ad: ResolvedAd?, requestId: String?) {
         try await apiClient.requestAd(
             conversationId: conversationId,
             messageId: messageId,
             contextText: contextText,
             language: nil,
-            userId: userId
+            userId: userId,
+            formats: formats
         )
     }
 
-    // MARK: - Internal tracking hooks (used by UI layer later)
+    // MARK: - Internal tracking hooks (used by UI layer)
     //
     // These are internal (not public) on purpose.
     static func trackImpression(ad: ResolvedAd, requestId: String?) async throws {
@@ -77,5 +88,17 @@ public enum CeedAdsSDK {
 
     static func trackClick(ad: ResolvedAd, requestId: String?) async throws {
         try await eventTracker.trackClick(ad: ad, requestId: requestId)
+    }
+
+    // MARK: - Extended tracking hooks for new ad formats
+
+    /// Tracks email submission for lead_gen ads
+    static func trackSubmit(ad: ResolvedAd, requestId: String?, email: String) async throws {
+        try await eventTracker.trackSubmit(ad: ad, requestId: requestId, email: email)
+    }
+
+    /// Tracks option selection for followup ads
+    static func trackOptionTap(ad: ResolvedAd, requestId: String?, optionId: String) async throws {
+        try await eventTracker.trackOptionTap(ad: ad, requestId: requestId, optionId: optionId)
     }
 }

@@ -138,4 +138,68 @@ final class EventTracker: @unchecked Sendable {
 
         try await apiClient.sendEvent(payload)
     }
+
+    // MARK: - Track Submit (Lead Gen)
+    // Sends a submit event when email is submitted in a lead_gen ad.
+    func trackSubmit(
+        ad: ResolvedAd,
+        requestId: String?,
+        email: String
+    ) async throws {
+
+        let snapshot: (appId: String, conversationId: String?, userId: String?, requestIdValue: String)
+        snapshot = queue.sync {
+            let appId = self.appId ?? ""
+            return (appId, self.conversationId, self.userId, requestId ?? "unknown")
+        }
+
+        guard !snapshot.appId.isEmpty else {
+            throw CeedAdsError.notInitialized
+        }
+
+        let payload = EventPayload(
+            type: .submit,
+            adId: ad.id,
+            advertiserId: ad.advertiserId,
+            requestId: snapshot.requestIdValue,
+            appId: snapshot.appId,
+            conversationId: snapshot.conversationId,
+            userId: snapshot.userId,
+            submittedEmail: email
+        )
+
+        try await apiClient.sendEvent(payload)
+    }
+
+    // MARK: - Track Option Tap (Followup)
+    // Sends an optionTap event when an option is selected in a followup ad.
+    func trackOptionTap(
+        ad: ResolvedAd,
+        requestId: String?,
+        optionId: String
+    ) async throws {
+
+        let snapshot: (appId: String, conversationId: String?, userId: String?, requestIdValue: String)
+        snapshot = queue.sync {
+            let appId = self.appId ?? ""
+            return (appId, self.conversationId, self.userId, requestId ?? "unknown")
+        }
+
+        guard !snapshot.appId.isEmpty else {
+            throw CeedAdsError.notInitialized
+        }
+
+        let payload = EventPayload(
+            type: .optionTap,
+            adId: ad.id,
+            advertiserId: ad.advertiserId,
+            requestId: snapshot.requestIdValue,
+            appId: snapshot.appId,
+            conversationId: snapshot.conversationId,
+            userId: snapshot.userId,
+            optionId: optionId
+        )
+
+        try await apiClient.sendEvent(payload)
+    }
 }

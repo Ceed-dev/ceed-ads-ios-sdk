@@ -83,7 +83,8 @@ public final class APIClient: @unchecked Sendable {
         messageId: String,
         contextText: String,
         language: String? = nil,
-        userId: String? = nil
+        userId: String? = nil,
+        formats: [AdFormat]? = nil
     ) async throws -> (ad: ResolvedAd?, requestId: String?) {
 
         // Snapshot config (no await while locked)
@@ -100,6 +101,9 @@ public final class APIClient: @unchecked Sendable {
             throw CeedAdsError.notInitialized
         }
 
+        // Convert AdFormat array to string array for API
+        let formatStrings = formats?.map { $0.rawValue }
+
         let mergedPayload = RequestPayload(
             appId: snapshot.appId,
             conversationId: conversationId,
@@ -107,7 +111,8 @@ public final class APIClient: @unchecked Sendable {
             contextText: contextText,
             language: language,
             userId: userId,
-            sdkVersion: snapshot.sdkVersion
+            sdkVersion: snapshot.sdkVersion,
+            formats: formatStrings
         )
 
         let urlString = "\(snapshot.apiBaseUrl)/requests"
